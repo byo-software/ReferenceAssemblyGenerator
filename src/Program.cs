@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using CommandLine;
-using Mono.Cecil;
-using Mono.Cecil.Cil;
+using dnlib.DotNet;
+using dnlib.DotNet.Emit;
 
 namespace ReferenceAssemblyGenerator
 {
@@ -10,11 +12,6 @@ namespace ReferenceAssemblyGenerator
     {
         public static int Main(string[] args)
         {
-            args = new[]
-            {
-                "C:\\Users\\troja\\source\\repos\\ImperialPlugins\\Plugins\\AdvancedRegions\\bin\\Debug\\net461\\AdvancedRegions.dll"
-            };
-
             var result = Parser.Default.ParseArguments<ProgramOptions>(args)
                 .WithParsed(RunWithOptions);
 
@@ -33,168 +30,178 @@ namespace ReferenceAssemblyGenerator
                 string fileName = Path.GetFileNameWithoutExtension(opts.AssemblyPath);
                 string extension = Path.GetExtension(opts.AssemblyPath);
 
-                opts.OutputFile = fileName + "-reference" + extension;
+                opts.OutputFile = opts.AssemblyPath.Replace(fileName + extension, fileName + "-reference" + extension);
             }
 
 
             byte[] assemblyData = File.ReadAllBytes(opts.AssemblyPath);
             using (MemoryStream ms = new MemoryStream(assemblyData))
             {
-                AssemblyDefinition assemblyDefinition = AssemblyDefinition.ReadAssembly(ms);
-                for (var i = 0; i < assemblyDefinition.Modules.Count; i++)
-                {
-                    var module = assemblyDefinition.Modules[i];
-                    for (var j = 0; j < module.Types.Count; j++)
-                    {
-                        var type = module.Types[j];
-                        if (type.IsNotPublic && !opts.KeepNonPublic)
-                        {
-                            module.Types.Remove(type);
-                            continue;
-                        }
+                ModuleDefMD module = ModuleDefMD.Load(ms);
 
-                        for (var k = 0; k < type.Methods.Count; k++)
+                var removedTypes = new List<TypeDef>();
+
+                for (var j = 0; j < module.Types.Count; j++)
+                {
+                    var type = module.Types[j];
+
+                    if (type.IsNotPublic && !opts.KeepNonPublic)
+                    {
+                        removedTypes.Add(type);
+                        module.Types.Remove(type);
+                        continue;
+                    }
+
+                    for (var k = 0; k < type.Methods.Count; k++)
+                    {
+                        var method = type.Methods[k];
+
+                        if (ShouldRemoveMethod(method, opts, removedTypes))
                         {
-                            var method = type.Methods[k];
-                            if (!method.IsPublic && !opts.KeepNonPublic)
+                            type.Methods.Remove(method);
+                        }
+                        else
+                        {
+                            PurgeMethodBody(method);
+                        }
+                    }
+
+                    for (var k = 0; k < type.Fields.Count; k++)
+                    {
+                        var field = type.Fields[k];
+                        if (removedTypes.Any(d => d.FullName.Equals(field.FieldType.FullName, StringComparison.OrdinalIgnoreCase))
+                            || (!field.IsPublic && !opts.KeepNonPublic))
+                        {
+                            type.Fields.Remove(field);
+                        }
+                        else
+                        {
+                            Console.WriteLine("Keeping field: " + field.FullName);
+                        }
+                    }
+
+                    for (var k = 0; k < type.Properties.Count; k++)
+                    {
+                        var property = type.Properties[k];
+                        var getMethod = property.GetMethod;
+                        var setMethod = property.SetMethod;
+
+                        if (getMethod != null)
+                        {
+                            if (ShouldRemoveMethod(getMethod, opts, removedTypes))
                             {
-                                type.Methods.Remove(method);
+                                getMethod = property.GetMethod = null;
                             }
                             else
                             {
-                                PurgeMethodBody(method);
+                                PurgeMethodBody(getMethod);
                             }
                         }
 
-                        for (var k = 0; k < type.Fields.Count; k++)
+                        if (setMethod != null)
                         {
-                            var field = type.Fields[k];
-                            if (!field.IsPublic && !opts.KeepNonPublic)
+                            if (ShouldRemoveMethod(setMethod, opts, removedTypes))
                             {
-                                type.Fields.Remove(field);
+                                setMethod = property.SetMethod = null;
+                            }
+                            else
+                            {
+                                PurgeMethodBody(setMethod);
                             }
                         }
 
-                        for (var k = 0; k < type.Properties.Count; k++)
+                        if (getMethod == null && setMethod == null)
                         {
-                            var property = type.Properties[k];
-                            var getMethod = property.GetMethod;
-                            var setMethod = property.SetMethod;
-
-                            if (getMethod != null)
-                            {
-                                if (!getMethod.IsPublic && !opts.KeepNonPublic)
-                                {
-                                    getMethod = property.GetMethod = null;
-                                }
-                                else
-                                {
-                                    PurgeMethodBody(getMethod);
-                                }
-                            }
-
-                            if (setMethod != null)
-                            {
-                                if (!setMethod.IsPublic && !opts.KeepNonPublic)
-                                {
-                                    setMethod = property.SetMethod = null;
-                                }
-                                else
-                                {
-                                    PurgeMethodBody(setMethod);
-                                }
-                            }
-
-                            if (getMethod == null && setMethod == null)
-                            {
-                                type.Properties.Remove(property);
-                            }
-                        }
-
-                        for (var k = 0; k < type.Events.Count; k++)
-                        {
-                            var @event = type.Events[k];
-                            var addMethod = @event.AddMethod;
-                            var invokeMethod = @event.InvokeMethod;
-                            var removeMethod = @event.RemoveMethod;
-                            var otherMethods = @event.OtherMethods;
-
-                            if (addMethod != null)
-                            {
-                                if (!addMethod.IsPublic && !opts.KeepNonPublic)
-                                {
-                                    addMethod = @event.AddMethod = null;
-                                }
-                                else
-                                {
-                                    PurgeMethodBody(addMethod);
-                                }
-                            }
-
-                            if (invokeMethod != null)
-                            {
-                                if (!invokeMethod.IsPublic && !opts.KeepNonPublic)
-                                {
-                                    invokeMethod = @event.InvokeMethod = null;
-                                }
-                                else
-                                {
-                                    PurgeMethodBody(invokeMethod);
-                                }
-                            }
-
-                            if (removeMethod != null)
-                            {
-
-                                if (!removeMethod.IsPublic && !opts.KeepNonPublic)
-                                {
-                                    removeMethod = @event.RemoveMethod = null;
-                                }
-                                else
-                                {
-                                    PurgeMethodBody(removeMethod);
-                                }
-                            }
-
-                            if (otherMethods != null)
-                            {
-                                foreach (var otherMethod in otherMethods)
-                                {
-                                    if (!otherMethod.IsPublic && !opts.KeepNonPublic)
-                                    {
-                                        @event.OtherMethods.Remove(otherMethod);
-                                    }
-                                    else
-                                    {
-                                        PurgeMethodBody(otherMethod);
-                                    }
-                                }
-                            }
-
-                            if (@event.OtherMethods.Count == 0)
-                            {
-                                otherMethods = null;
-                            }
-
-                            if (addMethod == null && invokeMethod == null
-                                                  && removeMethod == null && otherMethods == null)
-                            {
-                                type.Events.Remove(@event);
-                            }
+                            type.Properties.Remove(property);
                         }
                     }
 
-                    if (module.Types.Count == 0)
+                    for (var k = 0; k < type.Events.Count; k++)
                     {
-                        assemblyDefinition.Modules.Remove(module);
+                        var @event = type.Events[k];
+                        var addMethod = @event.AddMethod;
+                        var invokeMethod = @event.InvokeMethod;
+                        var removeMethod = @event.RemoveMethod;
+                        var otherMethods = @event.OtherMethods;
+
+                        if (addMethod != null)
+                        {
+                            if (ShouldRemoveMethod(addMethod, opts, removedTypes))
+                            {
+                                addMethod = @event.AddMethod = null;
+                            }
+                            else
+                            {
+                                PurgeMethodBody(addMethod);
+                            }
+                        }
+
+                        if (invokeMethod != null)
+                        {
+                            if (ShouldRemoveMethod(invokeMethod, opts, removedTypes))
+                            {
+                                invokeMethod = @event.InvokeMethod = null;
+                            }
+                            else
+                            {
+                                PurgeMethodBody(invokeMethod);
+                            }
+                        }
+
+                        if (removeMethod != null)
+                        {
+                            if (ShouldRemoveMethod(removeMethod, opts, removedTypes))
+                            {
+                                removeMethod = @event.RemoveMethod = null;
+                            }
+                            else
+                            {
+                                PurgeMethodBody(removeMethod);
+                            }
+                        }
+
+                        if (otherMethods != null)
+                        {
+                            foreach (var otherMethod in otherMethods)
+                            {
+                                if (ShouldRemoveMethod(otherMethod, opts, removedTypes))
+                                {
+                                    @event.OtherMethods.Remove(otherMethod);
+                                }
+                                else
+                                {
+                                    PurgeMethodBody(otherMethod);
+                                }
+                            }
+                        }
+
+                        if (@event.OtherMethods.Count == 0)
+                        {
+                            otherMethods = null;
+                        }
+
+                        if (addMethod == null
+                            && invokeMethod == null
+                            && removeMethod == null
+                            && otherMethods == null)
+                        {
+                            type.Events.Remove(@event);
+                        }
                     }
+
+                    module.Write(opts.OutputFile);
                 }
 
-                assemblyDefinition.Write(opts.OutputFile);
             }
         }
 
-        private static void PurgeMethodBody(MethodDefinition method)
+        private static bool ShouldRemoveMethod(MethodDef method, ProgramOptions opts, List<TypeDef> removedTypes)
+        {
+            return removedTypes.Any(d => method.Parameters.Any(e => e.ParamDef?.FullName?.Equals(d.FullName, StringComparison.OrdinalIgnoreCase) ?? false))
+                   || (!method.IsPublic && !opts.KeepNonPublic);
+        }
+
+        private static void PurgeMethodBody(MethodDef method)
         {
             if (!method.IsIL || method.Body == null)
             {
