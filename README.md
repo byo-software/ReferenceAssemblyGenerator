@@ -2,7 +2,7 @@
 A dotnet tool to generate reference assemblies.
 
 ### What is a reference assembly?
-Reference assemblies are assemblies which only contain metadata but no executable IL code.
+[Reference assemblies](https://github.com/dotnet/roslyn/blob/master/docs/features/refout.md) are assemblies which only contain metadata but no executable IL code.
 
 ### Why would you need this?
 Sometimes you do not want to ship executable code but only metadata for developers to interact with your dll.
