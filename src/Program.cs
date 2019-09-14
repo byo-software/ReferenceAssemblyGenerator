@@ -5,6 +5,7 @@ using System.Linq;
 using CommandLine;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
+using dnlib.DotNet.Writer;
 
 namespace ReferenceAssemblyGenerator
 {
@@ -12,6 +13,12 @@ namespace ReferenceAssemblyGenerator
     {
         public static int Main(string[] args)
         {
+            args = new[]
+            {
+
+                "C:\\Users\\troja\\source\\repos\\ImperialPlugins\\Plugins\\AdvancedRegions\\bin\\Debug\\net461\\AdvancedRegions.dll"
+            };
+
             var result = Parser.Default.ParseArguments<ProgramOptions>(args)
                 .WithParsed(RunWithOptions);
 
@@ -47,8 +54,13 @@ namespace ReferenceAssemblyGenerator
 
                     if (type.IsNotPublic && !opts.KeepNonPublic)
                     {
+                        type.Fields.Clear();
+                        type.Properties.Clear();
+                        type.Events.Clear();
+                        type.Methods.Clear();
+
                         removedTypes.Add(type);
-                        module.Types.Remove(type);
+                        // module.Types.Remove(type);
                         continue;
                     }
 
@@ -69,14 +81,11 @@ namespace ReferenceAssemblyGenerator
                     for (var k = 0; k < type.Fields.Count; k++)
                     {
                         var field = type.Fields[k];
+
                         if (removedTypes.Any(d => d.FullName.Equals(field.FieldType.FullName, StringComparison.OrdinalIgnoreCase))
                             || (!field.IsPublic && !opts.KeepNonPublic))
                         {
                             type.Fields.Remove(field);
-                        }
-                        else
-                        {
-                            Console.WriteLine("Keeping field: " + field.FullName);
                         }
                     }
 
@@ -189,27 +198,38 @@ namespace ReferenceAssemblyGenerator
                         }
                     }
 
-                    module.Write(opts.OutputFile);
+                    module.IsILOnly = true;
+                    module.VTableFixups = null;
+                    module.IsStrongNameSigned = false;
+                    module.Assembly.PublicKey = null;
+                    module.Assembly.HasPublicKey = false;
                 }
 
+                module.Write(opts.OutputFile);
             }
         }
 
         private static bool ShouldRemoveMethod(MethodDef method, ProgramOptions opts, List<TypeDef> removedTypes)
         {
-            return removedTypes.Any(d => method.Parameters.Any(e => e.ParamDef?.FullName?.Equals(d.FullName, StringComparison.OrdinalIgnoreCase) ?? false))
-                   || (!method.IsPublic && !opts.KeepNonPublic);
+            return !method.IsVirtual && !method.IsSpecialName && (removedTypes.Any(d => method.Parameters.Any(e => e.ParamDef?.FullName?.Equals(d.FullName, StringComparison.OrdinalIgnoreCase) ?? false))
+                   || (!method.IsPublic && !opts.KeepNonPublic));
         }
 
         private static void PurgeMethodBody(MethodDef method)
         {
             if (!method.IsIL || method.Body == null)
             {
+
                 return;
             }
 
+            method.Body.Variables.Clear();
             method.Body.Instructions.Clear();
-            method.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+            method.Body.ExceptionHandlers.Clear();
+
+            // This is what Roslyn does with /refout and /refonly
+            method.Body.Instructions.Add(Instruction.Create(OpCodes.Ldnull));
+            method.Body.Instructions.Add(Instruction.Create(OpCodes.Throw));
         }
     }
 }
