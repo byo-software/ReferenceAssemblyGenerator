@@ -13,12 +13,6 @@ namespace ReferenceAssemblyGenerator
     {
         public static int Main(string[] args)
         {
-            args = new[]
-            {
-
-                "C:\\Users\\troja\\source\\repos\\ImperialPlugins\\Plugins\\AdvancedRegions\\bin\\Debug\\net461\\AdvancedRegions.dll"
-            };
-
             var result = Parser.Default.ParseArguments<ProgramOptions>(args)
                 .WithParsed(RunWithOptions);
 
