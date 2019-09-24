@@ -24,3 +24,11 @@ By default, `<ReferenceOutputPath>` will be equal to the output file.
 
 ### License
 [MIT](https://github.com/ImperialPlugins/ReferenceAssemblyGenerator/blob/master/LICENSE)
+
+
+### ReferenceAssemblyGenerator vs. Rosyln (/refout and /refonly)
+The C# and Visual Basic .NET compilers (Rosyln) contains the similar options /refout and /refonly.
+
+* Unlike Rosyln, ReferenceAssemblyGenerator removes non public types too. It also removes all non-public attributes.
+* Rosyln only supports `throw null` as dummy instructions while ReferenceAssemblyGenerator also supports `ret` instead.
+* Rosyln can only generate reference assemblies if you have the full source code. ReferenceAssemblyGenerator does not need source code, only the .dll or .exe.
