@@ -5,7 +5,6 @@ using System.Linq;
 using CommandLine;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
-using dnlib.DotNet.Writer;
 
 namespace ReferenceAssemblyGenerator
 {
@@ -19,8 +18,13 @@ namespace ReferenceAssemblyGenerator
             return result.Tag == ParserResultType.Parsed ? 0 : 1;
         }
 
+        private static readonly List<TypeDef> s_RemovedTypes = new List<TypeDef>();
+        private static ProgramOptions s_ProgamOptions;
+
         private static void RunWithOptions(ProgramOptions opts)
         {
+            s_ProgamOptions = opts;
+
             if (!File.Exists(opts.AssemblyPath))
             {
                 throw new FileNotFoundException("Assembly file was not found", opts.AssemblyPath);
@@ -34,64 +38,73 @@ namespace ReferenceAssemblyGenerator
                 opts.OutputFile = opts.AssemblyPath.Replace(fileName + extension, fileName + "-reference" + extension);
             }
 
-
             byte[] assemblyData = File.ReadAllBytes(opts.AssemblyPath);
             using (MemoryStream ms = new MemoryStream(assemblyData))
             {
                 ModuleDefMD module = ModuleDefMD.Load(ms);
 
-                var removedTypes = new List<TypeDef>();
+                RemoveNonPublicTypes(module.Types);
+                RemoveNonPublicMembers(module.Types);
 
-                for (var j = 0; j < module.Types.Count; j++)
+                module.IsILOnly = true;
+                module.VTableFixups = null;
+                module.IsStrongNameSigned = false;
+                module.Assembly.PublicKey = null;
+                module.Assembly.HasPublicKey = false;
+                ClearCustomAttributes(module.CustomAttributes);
+
+                module.Write(opts.OutputFile);
+            }
+        }
+
+        private static void RemoveNonPublicMembers(ICollection<TypeDef> types)
+        {
+            foreach (var type in types)
+            {
+                ClearCustomAttributes(type.CustomAttributes);
+
+                foreach (var method in type.Methods.ToList())
                 {
-                    var type = module.Types[j];
+                    ClearCustomAttributes(method.CustomAttributes);
 
-                    if (type.IsNotPublic && !opts.KeepNonPublic)
+                    if (ShouldRemoveMethod(method))
                     {
-                        type.Fields.Clear();
-                        type.Properties.Clear();
-                        type.Events.Clear();
-                        type.Methods.Clear();
-
-                        removedTypes.Add(type);
-                        // module.Types.Remove(type);
-                        continue;
+                        type.Methods.Remove(method);
                     }
-
-                    for (var k = 0; k < type.Methods.Count; k++)
+                    else
                     {
-                        var method = type.Methods[k];
-
-                        if (ShouldRemoveMethod(method, opts, removedTypes))
-                        {
-                            type.Methods.Remove(method);
-                        }
-                        else
-                        {
-                            PurgeMethodBody(method);
-                        }
+                        PurgeMethodBody(method);
                     }
+                }
 
-                    for (var k = 0; k < type.Fields.Count; k++)
+                foreach (var field in type.Fields.ToList())
+                {
+                    ClearCustomAttributes(field.CustomAttributes);
+
+                    if (s_RemovedTypes.Any(d => d.FullName.Equals(field.FieldType.FullName, StringComparison.OrdinalIgnoreCase)) || (!field.IsPublic && !s_ProgamOptions.KeepNonPublic))
                     {
-                        var field = type.Fields[k];
-
-                        if (removedTypes.Any(d => d.FullName.Equals(field.FieldType.FullName, StringComparison.OrdinalIgnoreCase))
-                            || (!field.IsPublic && !opts.KeepNonPublic))
-                        {
-                            type.Fields.Remove(field);
-                        }
+                        type.Fields.Remove(field);
                     }
+                }
 
-                    for (var k = 0; k < type.Properties.Count; k++)
+                foreach (var property in type.Properties.ToList())
+                {
+                    ClearCustomAttributes(property.CustomAttributes);
+
+                    var getMethod = property.GetMethod;
+                    var setMethod = property.SetMethod;
+
+                    if (getMethod != null || setMethod != null)
                     {
-                        var property = type.Properties[k];
-                        var getMethod = property.GetMethod;
-                        var setMethod = property.SetMethod;
+                        var propertyType = getMethod != null ? getMethod.ReturnType : setMethod.Parameters[0].Type;
+                        bool shouldRemoveProperty =
+                            s_RemovedTypes.Any(d => d.FullName.Equals(propertyType.FullName));
 
                         if (getMethod != null)
                         {
-                            if (ShouldRemoveMethod(getMethod, opts, removedTypes))
+                            ClearCustomAttributes(getMethod.CustomAttributes);
+
+                            if (shouldRemoveProperty)
                             {
                                 getMethod = property.GetMethod = null;
                             }
@@ -103,7 +116,9 @@ namespace ReferenceAssemblyGenerator
 
                         if (setMethod != null)
                         {
-                            if (ShouldRemoveMethod(setMethod, opts, removedTypes))
+                            ClearCustomAttributes(setMethod.CustomAttributes);
+
+                            if (shouldRemoveProperty)
                             {
                                 setMethod = property.SetMethod = null;
                             }
@@ -112,118 +127,167 @@ namespace ReferenceAssemblyGenerator
                                 PurgeMethodBody(setMethod);
                             }
                         }
-
-                        if (getMethod == null && setMethod == null)
-                        {
-                            type.Properties.Remove(property);
-                        }
                     }
 
-                    for (var k = 0; k < type.Events.Count; k++)
+                    if (getMethod == null && setMethod == null)
                     {
-                        var @event = type.Events[k];
-                        var addMethod = @event.AddMethod;
-                        var invokeMethod = @event.InvokeMethod;
-                        var removeMethod = @event.RemoveMethod;
-                        var otherMethods = @event.OtherMethods;
-
-                        if (addMethod != null)
-                        {
-                            if (ShouldRemoveMethod(addMethod, opts, removedTypes))
-                            {
-                                addMethod = @event.AddMethod = null;
-                            }
-                            else
-                            {
-                                PurgeMethodBody(addMethod);
-                            }
-                        }
-
-                        if (invokeMethod != null)
-                        {
-                            if (ShouldRemoveMethod(invokeMethod, opts, removedTypes))
-                            {
-                                invokeMethod = @event.InvokeMethod = null;
-                            }
-                            else
-                            {
-                                PurgeMethodBody(invokeMethod);
-                            }
-                        }
-
-                        if (removeMethod != null)
-                        {
-                            if (ShouldRemoveMethod(removeMethod, opts, removedTypes))
-                            {
-                                removeMethod = @event.RemoveMethod = null;
-                            }
-                            else
-                            {
-                                PurgeMethodBody(removeMethod);
-                            }
-                        }
-
-                        if (otherMethods != null)
-                        {
-                            foreach (var otherMethod in otherMethods)
-                            {
-                                if (ShouldRemoveMethod(otherMethod, opts, removedTypes))
-                                {
-                                    @event.OtherMethods.Remove(otherMethod);
-                                }
-                                else
-                                {
-                                    PurgeMethodBody(otherMethod);
-                                }
-                            }
-                        }
-
-                        if (@event.OtherMethods.Count == 0)
-                        {
-                            otherMethods = null;
-                        }
-
-                        if (addMethod == null
-                            && invokeMethod == null
-                            && removeMethod == null
-                            && otherMethods == null)
-                        {
-                            type.Events.Remove(@event);
-                        }
+                        type.Properties.Remove(property);
                     }
-
-                    module.IsILOnly = true;
-                    module.VTableFixups = null;
-                    module.IsStrongNameSigned = false;
-                    module.Assembly.PublicKey = null;
-                    module.Assembly.HasPublicKey = false;
                 }
 
-                module.Write(opts.OutputFile);
+                foreach (var @event in type.Events)
+                {
+                    ClearCustomAttributes(@event.CustomAttributes);
+
+                    var addMethod = @event.AddMethod;
+                    var invokeMethod = @event.InvokeMethod;
+                    var removeMethod = @event.RemoveMethod;
+                    var otherMethods = @event.OtherMethods;
+
+                    if (addMethod != null)
+                    {
+                        ClearCustomAttributes(addMethod.CustomAttributes);
+
+                        if (ShouldRemoveMethod(addMethod))
+                        {
+                            addMethod = @event.AddMethod = null;
+                        }
+                        else
+                        {
+                            PurgeMethodBody(addMethod);
+                        }
+                    }
+
+                    if (invokeMethod != null)
+                    {
+                        ClearCustomAttributes(invokeMethod.CustomAttributes);
+
+                        if (ShouldRemoveMethod(invokeMethod))
+                        {
+                            invokeMethod = @event.InvokeMethod = null;
+                        }
+                        else
+                        {
+                            PurgeMethodBody(invokeMethod);
+                        }
+                    }
+
+                    if (removeMethod != null)
+                    {
+                        ClearCustomAttributes(removeMethod.CustomAttributes);
+
+                        if (ShouldRemoveMethod(removeMethod))
+                        {
+                            removeMethod = @event.RemoveMethod = null;
+                        }
+                        else
+                        {
+                            PurgeMethodBody(removeMethod);
+                        }
+                    }
+
+                    if (otherMethods != null)
+                    {
+                        foreach (var otherMethod in otherMethods.ToList())
+                        {
+                            ClearCustomAttributes(otherMethod.CustomAttributes);
+
+                            if (ShouldRemoveMethod(otherMethod))
+                            {
+                                @event.OtherMethods.Remove(otherMethod);
+                            }
+                            else
+                            {
+                                PurgeMethodBody(otherMethod);
+                            }
+                        }
+                    }
+
+                    if (@event.OtherMethods.Count == 0)
+                    {
+                        otherMethods = null;
+                    }
+
+                    if (addMethod == null
+                        && invokeMethod == null
+                        && removeMethod == null
+                        && otherMethods == null)
+                    {
+                        type.Events.Remove(@event);
+                    }
+                }
+
+                RemoveNonPublicMembers(type.NestedTypes);
             }
         }
 
-        private static bool ShouldRemoveMethod(MethodDef method, ProgramOptions opts, List<TypeDef> removedTypes)
+        private static void RemoveNonPublicTypes(ICollection<TypeDef> types)
         {
-            return !method.IsVirtual && !method.IsSpecialName && (removedTypes.Any(d => method.Parameters.Any(e => e.ParamDef?.FullName?.Equals(d.FullName, StringComparison.OrdinalIgnoreCase) ?? false))
-                   || (!method.IsPublic && !opts.KeepNonPublic));
+            foreach (var type in types.ToList())
+            {
+                type.CustomAttributes.Clear();
+
+                if ((type.IsNotPublic || type.IsGlobalModuleType) && !s_ProgamOptions.KeepNonPublic)
+                {
+                    type.Fields.Clear();
+                    type.Properties.Clear();
+                    type.Events.Clear();
+                    type.Methods.Clear();
+                    type.NestedTypes.Clear();
+
+                    if (!type.IsGlobalModuleType)
+                    {
+                        types.Remove(type);
+                    }
+
+                    s_RemovedTypes.Add(type);
+                    continue;
+                }
+
+                RemoveNonPublicTypes(type.NestedTypes);
+            }
+        }
+
+        private static void ClearCustomAttributes(CustomAttributeCollection collection)
+        {
+            foreach (var type in s_RemovedTypes)
+            {
+                collection.RemoveAll(type.FullName);
+            }
+        }
+
+        private static bool ShouldRemoveMethod(MethodDef method)
+        {
+            if (s_RemovedTypes.Any(d => method.Parameters.Any(e => e.ParamDef?.FullName?.Equals(d.FullName, StringComparison.OrdinalIgnoreCase) ?? false)))
+            {
+                return true;
+            }
+
+            return !method.IsPublic && !s_ProgamOptions.KeepNonPublic;
         }
 
         private static void PurgeMethodBody(MethodDef method)
         {
             if (!method.IsIL || method.Body == null)
             {
-
+                Console.WriteLine($"Skipped method: {method.FullName} (NO IL BODY)");
                 return;
             }
 
-            method.Body.Variables.Clear();
-            method.Body.Instructions.Clear();
-            method.Body.ExceptionHandlers.Clear();
+            method.Body = new CilBody();
 
-            // This is what Roslyn does with /refout and /refonly
-            method.Body.Instructions.Add(Instruction.Create(OpCodes.Ldnull));
-            method.Body.Instructions.Add(Instruction.Create(OpCodes.Throw));
+            if (!s_ProgamOptions.UseRet)
+            {
+                // This is what Roslyn does with /refout and /refonly
+                method.Body.Instructions.Add(Instruction.Create(OpCodes.Ldnull));
+                method.Body.Instructions.Add(Instruction.Create(OpCodes.Throw));
+            }
+            else
+            {
+                method.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+            }
+
+            method.Body.UpdateInstructionOffsets();
         }
     }
 }
