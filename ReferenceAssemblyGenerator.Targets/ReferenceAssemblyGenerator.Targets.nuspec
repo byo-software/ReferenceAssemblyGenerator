@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
     <metadata>
         <id>ReferenceAssemblyGenerator.Targets</id>
-        <version>1.0.1</version>
+        <version>1.0.4</version>
         <description>Build targets for ReferenceAssemblyGenerator</description>
         <authors>Enes Sadık Özbek &lt;esozbek.me&gt;</authors>
 		<developmentDependency>true</developmentDependency>
