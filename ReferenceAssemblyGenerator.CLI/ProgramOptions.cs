@@ -1,6 +1,6 @@
 ﻿using CommandLine;
 
-namespace ReferenceAssemblyGenerator
+namespace ReferenceAssemblyGenerator.CLI
 {
     public class ProgramOptions
     {

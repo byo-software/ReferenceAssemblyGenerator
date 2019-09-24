@@ -6,7 +6,7 @@ using CommandLine;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
 
-namespace ReferenceAssemblyGenerator
+namespace ReferenceAssemblyGenerator.CLI
 {
     public class Program
     {
