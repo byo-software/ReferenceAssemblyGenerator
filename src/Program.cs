@@ -38,6 +38,11 @@ namespace ReferenceAssemblyGenerator
                 opts.OutputFile = opts.AssemblyPath.Replace(fileName + extension, fileName + "-reference" + extension);
             }
 
+            if (File.Exists(opts.OutputFile) && !opts.Force)
+            {
+                throw new Exception("Output file exists already. Use --force to override it.");
+            }
+
             byte[] assemblyData = File.ReadAllBytes(opts.AssemblyPath);
             using (MemoryStream ms = new MemoryStream(assemblyData))
             {
@@ -52,6 +57,11 @@ namespace ReferenceAssemblyGenerator
                 module.Assembly.PublicKey = null;
                 module.Assembly.HasPublicKey = false;
                 ClearCustomAttributes(module.CustomAttributes);
+
+                if (File.Exists(opts.OutputFile))
+                {
+                    File.Delete(opts.OutputFile);
+                }
 
                 module.Write(opts.OutputFile);
             }

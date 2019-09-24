@@ -6,8 +6,17 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>generatereference</ToolCommandName>
     <PackageOutputPath>./nupkg</PackageOutputPath>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Copyright>Copyright (C) Enes Sadik Oezbek</Copyright>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Authors>Enes Sadık Özbek &lt;esozbek.me&gt;</Authors>
+    <Company />
+    <Description>Reference assembly generator for .NET modules</Description>
+    <PackageProjectUrl>http://github.com/Trojaner/ReferenceAssemblyGenerator</PackageProjectUrl>
+    <RepositoryUrl>http://github.com/Trojaner/ReferenceAssemblyGenerator</RepositoryUrl>
+    <PackageTags>reference assembly, dnlib</PackageTags>
+    <PackageId>ReferenceAssemblyGenerator.CLI</PackageId>
+    <Product>ReferenceAssemblyGenerator CLI</Product>
   </PropertyGroup>
 
   <ItemGroup>

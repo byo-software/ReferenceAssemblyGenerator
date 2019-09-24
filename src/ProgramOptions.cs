@@ -7,6 +7,9 @@ namespace ReferenceAssemblyGenerator
         [Option('o', "output", Required = false, HelpText = "Sets the output file")]
         public string OutputFile { get; set; }
 
+        [Option('f', "force", Required = false, HelpText = "Overrides output file if it exists")]
+        public bool Force { get; set; }
+
         [Option("keep-non-public", Required = false, HelpText = "Sets if non-public metadata should be kept")]
         public bool KeepNonPublic { get; set; }
 
