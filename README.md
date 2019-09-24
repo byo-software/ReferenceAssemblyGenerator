@@ -17,7 +17,7 @@ You can then just provide your reference assembly to them. They will not need ac
 #### NuGet
 First install the CLI tool globally: `dotnet tool install ReferenceAssemblyGenerator.CLI --global`.
 
-After that install `ReferenceAssemblyGenerator.Targets` to your project and set `<GenerateReference>` to true in your .csproj.
+After that install `ReferenceAssemblyGenerator.BuildTargets` to your project and set `<GenerateReference>` to true in your .csproj.
 You can also set `<ReferenceKeepNonPublic>`, `<ReferenceUseRet>` and `<ReferenceOutputPath>`.
 
 By default, `<ReferenceOutputPath>` will be equal to the output file. 

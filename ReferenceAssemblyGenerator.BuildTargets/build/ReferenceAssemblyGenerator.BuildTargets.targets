@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Target Name="RunReferenceAssemblyGenerator" AfterTargets="AfterBuild" Condition="'$(GenerateReference)' == 'true'">
+  <Target Name="RunReferenceAssemblyGenerator" AfterTargets="AfterBuild">
 	<PropertyGroup Condition="'$(OutputType)' == 'Library'">
 		<InputFile>$(AssemblyName).dll</InputFile>
 	</PropertyGroup>
@@ -20,6 +20,6 @@
 		<ReferenceGeneratorCommand>$(ReferenceGeneratorCommand) --keep-non-public</ReferenceGeneratorCommand>
 	</PropertyGroup>
 	
-    <Exec WorkingDirectory="$(OutDir)" Command="$(ReferenceGeneratorCommand)" />
+    <Exec WorkingDirectory="$(OutDir)" Command="$(ReferenceGeneratorCommand)" Condition="'$(GenerateReference)' == 'true'" />
   </Target>
 </Project>
