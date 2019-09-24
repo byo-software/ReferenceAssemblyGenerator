@@ -10,7 +10,15 @@ This can be especially useful if other developers are developing addons/plugins/
 You can then just provide your reference assembly to them. They will not need access to your product.
 
 ### Usage
-`dotnet generatereference [--keep-non-public] [-o <outputfile>] <assemblyPath>`
+#### CLI
+`dotnet tool install ReferenceAssemblyGenerator.CLI <-g|--global>`
+`dotnet generatereference -- [--keep-non-public] [--force] [--use-ret] [--output <outputfile>] <assemblyPath>`
+
+#### NuGet
+Install `ReferenceAssemblyGenerator.Targets` and set `<GenerateReference>` to true in your .csproj.
+You can also set `<ReferenceKeepNonPublic>`, `<ReferenceUseRet>` and `<ReferenceOutputPath>`.
+
+By default, `<ReferenceOutputPath>` will be equal to the output file. 
 
 ### License
 [MIT](https://github.com/ImperialPlugins/ReferenceAssemblyGenerator/blob/master/LICENSE)
