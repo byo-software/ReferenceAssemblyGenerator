@@ -27,7 +27,7 @@ By default, `<ReferenceOutputPath>` will be equal to the output file.
 
 
 ### ReferenceAssemblyGenerator vs. Rosyln (/refout and /refonly)
-The C# and Visual Basic .NET compilers (Rosyln) contains the similar options /refout and /refonly.
+The C# and Visual Basic .NET compiler (Rosyln) contains the similar options /refout and /refonly.
 
 * Unlike Rosyln, ReferenceAssemblyGenerator removes non public types too. It also removes all non-public attributes.
 * Rosyln only supports `throw null` as dummy instructions while ReferenceAssemblyGenerator also supports `ret` instead.
