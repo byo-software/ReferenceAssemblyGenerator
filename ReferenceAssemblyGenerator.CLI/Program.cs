@@ -273,6 +273,11 @@ namespace ReferenceAssemblyGenerator.CLI
                 return true;
             }
 
+            if (method.IsSpecialName && method.Name.Equals(".ctor"))
+            {
+                return false;
+            }
+
             return !method.IsPublic && !s_ProgamOptions.KeepNonPublic;
         }
 
