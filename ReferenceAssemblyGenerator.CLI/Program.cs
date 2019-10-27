@@ -12,6 +12,13 @@ namespace ReferenceAssemblyGenerator.CLI
     {
         public static int Main(string[] args)
         {
+            args = new[]
+            {
+                "C:\\Users\\troja\\source\\repos\\ImperialPlugins\\Plugins\\AdvancedRegions\\bin\\Debug\\net461\\AdvancedRegions.dll",
+                "-o",
+                "C:\\Users\\troja\\source\\repos\\ImperialPlugins\\Plugins\\AdvancedRegions\\bin\\Debug\\net461\\AdvancedRegions-reference.dll"
+            };
+
             var result = Parser.Default.ParseArguments<ProgramOptions>(args)
                 .WithParsed(RunWithOptions);
 
@@ -44,9 +51,11 @@ namespace ReferenceAssemblyGenerator.CLI
             }
 
             byte[] assemblyData = File.ReadAllBytes(opts.AssemblyPath);
-            using (MemoryStream ms = new MemoryStream(assemblyData))
+            
+            using (MemoryStream inputStream = new MemoryStream(assemblyData))
+            using (MemoryStream outputStream = new MemoryStream(assemblyData))
             {
-                ModuleDefMD module = ModuleDefMD.Load(ms);
+                ModuleDefMD module = ModuleDefMD.Load(inputStream);
 
                 RemoveNonPublicTypes(module.Types);
                 RemoveNonPublicMembers(module.Types);
@@ -63,7 +72,13 @@ namespace ReferenceAssemblyGenerator.CLI
                     File.Delete(opts.OutputFile);
                 }
 
-                module.Write(opts.OutputFile);
+                module.Write(outputStream);
+                outputStream.Seek(0, SeekOrigin.Begin);
+
+                using (var fileStream = File.Create(opts.OutputFile))
+                {
+                    outputStream.CopyTo(fileStream);
+                }
             }
         }
 
@@ -273,7 +288,7 @@ namespace ReferenceAssemblyGenerator.CLI
                 return true;
             }
 
-            if (method.IsSpecialName && method.Name.Equals(".ctor"))
+            if (method.IsSpecialName && (method.Name.Equals(".ctor") || method.Name.Equals(".cctor")))
             {
                 return false;
             }

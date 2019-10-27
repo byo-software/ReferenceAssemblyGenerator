@@ -6,7 +6,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>generatereference</ToolCommandName>
     <PackageOutputPath>./nupkg</PackageOutputPath>
-    <Version>1.0.2</Version>
+    <Version>1.0.4</Version>
     <Copyright>Copyright (C) Enes Sadik Oezbek</Copyright>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <Authors>Enes Sadık Özbek &lt;esozbek.me&gt;</Authors>
@@ -22,6 +22,10 @@
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.6.0" />
     <PackageReference Include="dnlib" Version="3.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="nupkg\" />
   </ItemGroup>
 
 </Project>
