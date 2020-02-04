@@ -99,7 +99,7 @@ namespace ReferenceAssemblyGenerator.CLI
                 {
                     ClearCustomAttributes(field.CustomAttributes);
 
-                    if (s_RemovedTypes.Any(d => d.FullName.Equals(field.FieldType.FullName, StringComparison.OrdinalIgnoreCase)) || (!field.IsPublic && !s_ProgamOptions.KeepNonPublic))
+                    if (s_RemovedTypes.Any(d => d.FullName.Equals(field.FieldType.FullName, StringComparison.OrdinalIgnoreCase)) || (!field.IsPublic && !field.IsFamily && !s_ProgamOptions.KeepNonPublic))
                     {
                         type.Fields.Remove(field);
                     }
@@ -282,6 +282,11 @@ namespace ReferenceAssemblyGenerator.CLI
             }
 
             if (method.IsSpecialName && (method.Name.Equals(".ctor") || method.Name.Equals(".cctor")))
+            {
+                return false;
+            }
+
+            if (method.IsFamily)
             {
                 return false;
             }
