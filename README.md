@@ -1,4 +1,4 @@
-# ReferenceAssemblyGenerator
+# Reference Assembly Generator
 A dotnet tool to generate reference assemblies.
 
 ### What is a reference assembly?
